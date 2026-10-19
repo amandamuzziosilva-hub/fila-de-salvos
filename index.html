@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fila de salvos">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f6e4e2">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Fila de salvos</title>
+<style>
+  :root{
+    --ink:#3d3239; --ink-soft:#5b4d55; --muted:#8b7f86; --line:rgba(255,255,255,.75);
+    --glass:rgba(255,255,255,.58); --glass-strong:rgba(255,255,255,.82);
+    --rose:#c4707a; --rose-soft:#f6dde0; --sage:#6f8a68; --sage-soft:#e2edde;
+    --lav-soft:#e6e1f4; --sand:#8a6a45; --sand-soft:#f6ead5; --err:#a23b3b; --err-soft:#f7dede;
+    --dark:#3b3640;
+    --shadow:0 14px 44px rgba(130,86,100,.12);
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;color:var(--ink);min-height:100vh;
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:
+      radial-gradient(900px 600px at 10% -10%, #f7c9d3 0%, rgba(247,201,211,0) 60%),
+      radial-gradient(800px 600px at 100% 5%, #ddd6f3 0%, rgba(221,214,243,0) 60%),
+      radial-gradient(900px 700px at 90% 60%, #f9e2cc 0%, rgba(249,226,204,0) 60%),
+      radial-gradient(900px 700px at 0% 100%, #d6e9d0 0%, rgba(214,233,208,0) 60%),
+      #fbf7f4;
+    background-attachment:fixed;
+  }
+  /* textura de grão, como na referência verde */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;opacity:.07;z-index:0;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+  button,input,select,textarea{font:inherit;color:inherit}
+  .serif{font-family:Georgia,"Times New Roman","Iowan Old Style",serif}
+
+  .wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:calc(22px + env(safe-area-inset-top)) 22px 150px}
+
+  /* cabeçalho */
+  .head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .kicker{font-size:13px;color:var(--muted);letter-spacing:.02em;margin:0 0 6px}
+  h1.title{
+    margin:0;font-family:Georgia,"Times New Roman","Iowan Old Style",serif;font-weight:400;
+    font-size:clamp(44px,9vw,72px);line-height:1;letter-spacing:-.03em;color:var(--ink-soft);
+  }
+  .sub{margin:10px 0 0;color:var(--muted);font-size:15px}
+  .conn{
+    flex:none;border:1px solid var(--line);background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border-radius:999px;padding:7px 14px;font-size:12.5px;color:var(--muted);cursor:pointer;margin-top:4px;
+  }
+
+  /* filtros */
+  .tabs{display:flex;gap:8px;overflow-x:auto;margin:26px -22px 0;padding:2px 22px 6px;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .pill{
+    flex:none;border:1px solid var(--line);background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border-radius:999px;padding:9px 16px;font-size:14px;cursor:pointer;color:var(--ink-soft);box-shadow:0 4px 18px rgba(130,86,100,.06);
+  }
+  .pill .n{color:var(--muted);margin-left:6px;font-size:12.5px}
+  .pill.on{background:var(--dark);color:#fff;border-color:var(--dark)}
+  .pill.on .n{color:rgba(255,255,255,.65)}
+  .chips{display:flex;gap:6px;overflow-x:auto;margin:10px -22px 0;padding:2px 22px 6px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{
+    flex:none;border:1px solid var(--line);background:rgba(255,255,255,.38);border-radius:999px;padding:5px 13px;font-size:12.5px;
+    cursor:pointer;color:var(--muted)
+  }
+  .chip.on{background:var(--glass-strong);color:var(--ink);box-shadow:0 4px 14px rgba(130,86,100,.08)}
+  .searchbox{margin-top:14px}
+  .searchbox input{
+    width:100%;border:1px solid var(--line);background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border-radius:999px;padding:11px 18px;font-size:16px;outline:none
+  }
+  .searchbox input::placeholder{color:var(--muted)}
+
+  /* avisos */
+  .banner{border-radius:18px;padding:12px 16px;font-size:13.5px;margin-top:16px;border:1px solid var(--line)}
+  .banner.warn{background:var(--sand-soft);color:var(--sand)}
+  .banner.err{background:var(--err-soft);color:var(--err)}
+  .banner button{margin-left:8px;border:0;background:none;text-decoration:underline;cursor:pointer;color:inherit;padding:0}
+
+  /* cartões */
+  .feed{display:flex;flex-direction:column;gap:22px;margin-top:22px}
+  .card{
+    display:grid;grid-template-columns:360px 1fr;gap:24px;padding:18px;border-radius:32px;
+    background:var(--glass);border:1px solid var(--line);box-shadow:var(--shadow);
+    backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+  }
+  .media{border-radius:22px;overflow:hidden;background:#fff;align-self:start;box-shadow:0 8px 28px rgba(130,86,100,.10)}
+  .media iframe{display:block;width:100%;height:720px;border:0}
+  .unavail{aspect-ratio:4/5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:rgba(255,255,255,.7);color:var(--muted);text-align:center;padding:24px;font-size:14px}
+  .unavail a{color:var(--rose);font-size:13px}
+
+  .notes{display:flex;flex-direction:column;gap:14px;min-width:0;padding:4px 4px 4px 0}
+  .meta-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+  .badge{border-radius:999px;padding:3px 11px;font-size:12px;font-weight:600}
+  .b-pendente{background:var(--rose-soft);color:var(--rose)}
+  .b-lido{background:var(--sage-soft);color:var(--sage)}
+  .b-arquivado,.b-indisponivel{background:var(--lav-soft);color:#7a6f99}
+  .tema{
+    width:100%;border:0;background:none;outline:none;padding:2px 0;
+    font-family:Georgia,"Times New Roman",serif;font-size:26px;line-height:1.15;letter-spacing:-.01em;color:var(--ink-soft)
+  }
+  .tema::placeholder{color:#bbb0b6}
+  .lbl{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .field{min-width:0}
+  .field input[type=text],.field select,.field textarea{
+    width:100%;border:1px solid var(--line);background:rgba(255,255,255,.7);border-radius:16px;padding:10px 13px;font-size:16px;outline:none
+  }
+  .field textarea{resize:vertical;min-height:70px;line-height:1.45}
+  .field input:focus,.field select:focus,.field textarea:focus,.searchbox input:focus{background:#fff;box-shadow:0 0 0 3px rgba(196,112,122,.18)}
+  details.more{border-radius:20px;background:rgba(255,255,255,.4);border:1px solid var(--line);padding:0 14px}
+  details.more summary{cursor:pointer;padding:12px 0;font-size:14px;color:var(--ink-soft);list-style:none;display:flex;justify-content:space-between;align-items:center}
+  details.more summary::-webkit-details-marker{display:none}
+  details.more summary::after{content:"+";font-size:20px;color:var(--muted);line-height:1}
+  details.more[open] summary::after{content:"−"}
+  .more-body{display:flex;flex-direction:column;gap:12px;padding:2px 0 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .check{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink-soft)}
+  .check input{width:18px;height:18px;accent-color:var(--rose)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;align-items:center}
+  .btn{
+    border:1px solid var(--line);background:var(--glass-strong);border-radius:999px;padding:10px 18px;font-size:14px;cursor:pointer;
+    text-decoration:none;color:var(--ink-soft);box-shadow:0 4px 16px rgba(130,86,100,.07)
+  }
+  .btn.primary{background:var(--dark);color:#fff;border-color:var(--dark)}
+  .btn.link{border:0;background:none;box-shadow:none;color:var(--muted);text-decoration:underline;padding:10px 6px;font-size:13px}
+  .empty{text-align:center;padding:70px 0}
+  .empty .big{font-family:Georgia,"Times New Roman",serif;font-size:34px;letter-spacing:-.02em;color:var(--ink-soft)}
+  .empty .small{color:var(--muted);margin-top:8px}
+
+  /* barra flutuante */
+  .dock{
+    position:fixed;left:50%;transform:translateX(-50%);z-index:10;
+    bottom:calc(16px + env(safe-area-inset-bottom));width:min(560px,calc(100vw - 28px));
+    display:flex;gap:8px;align-items:center;padding:8px;border-radius:999px;
+    background:var(--glass);border:1px solid var(--line);box-shadow:0 18px 50px rgba(130,86,100,.20);
+    backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  }
+  .dock input{flex:1;min-width:0;border:0;background:none;outline:none;padding:10px 14px;font-size:16px}
+  .dock input::placeholder{color:var(--muted)}
+  .dock button{
+    flex:none;width:46px;height:46px;border-radius:50%;border:0;background:var(--dark);color:#fff;font-size:24px;line-height:1;cursor:pointer;
+    box-shadow:0 6px 18px rgba(59,54,64,.35)
+  }
+
+  .toast{
+    position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translateX(-50%);
+    background:var(--dark);color:#fff;padding:10px 18px;border-radius:999px;font-size:13.5px;opacity:0;pointer-events:none;
+    transition:opacity .2s;z-index:30;max-width:90vw;text-align:center
+  }
+  .toast.show{opacity:1}
+
+  .overlay{position:fixed;inset:0;background:rgba(80,60,70,.30);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:20px;z-index:40}
+  .overlay.show{display:flex}
+  .modal{background:var(--glass-strong);border:1px solid var(--line);border-radius:32px;padding:28px;max-width:480px;width:100%;box-shadow:var(--shadow)}
+  .modal h2{margin:0 0 8px;font-family:Georgia,serif;font-weight:400;font-size:30px;letter-spacing:-.02em;color:var(--ink-soft)}
+  .modal p{margin:0 0 16px;color:var(--muted);font-size:14px}
+  .modal input{width:100%;border:1px solid var(--line);background:rgba(255,255,255,.8);border-radius:16px;padding:12px 14px;font-size:16px;margin-bottom:10px;outline:none}
+  .modal .msg{font-size:13px;color:var(--err);min-height:18px;margin-bottom:8px}
+  .modal .row{display:flex;gap:8px;justify-content:flex-end}
+
+  @media (max-width:900px){
+    .card{grid-template-columns:1fr}
+    .media iframe{height:700px}
+  }
+  @media (max-width:560px){
+    .wrap{padding-left:16px;padding-right:16px}
+    .tabs,.chips{margin-left:-16px;margin-right:-16px;padding-left:16px;padding-right:16px}
+    .card{padding:12px;border-radius:28px;gap:16px}
+    .grid2{grid-template-columns:1fr}
+    .tema{font-size:24px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <div>
+      <p class="kicker">Fila de salvos</p>
+      <h1 class="title" id="title">Pendentes</h1>
+      <p class="sub" id="sub">o que você guardou, sem o feed</p>
+    </div>
+    <button class="conn" id="openConfig" type="button">conexão</button>
+  </header>
+
+  <nav class="tabs" id="tabs"></nav>
+  <nav class="chips" id="chips"></nav>
+  <div class="searchbox"><input id="search" type="search" placeholder="Buscar em temas, notas e perfis"></div>
+
+  <div id="banners"></div>
+  <div class="feed" id="feed"></div>
+</div>
+
+<form class="dock" id="dock">
+  <input type="url" inputmode="url" placeholder="Colar link do Instagram" autocomplete="off" aria-label="Link do Instagram">
+  <button type="submit" title="Salvar na fila" aria-label="Salvar na fila">+</button>
+</form>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="config">
+  <div class="modal">
+    <h2>Conectar à sua planilha</h2>
+    <p>Cole aqui o endereço do seu script (o que termina em <b>/exec</b>). Ele fica guardado só neste aparelho e não vai para o GitHub.</p>
+    <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+    <div class="msg" id="cfgMsg"></div>
+    <div class="row">
+      <button class="btn" id="cfgCancel" type="button">Cancelar</button>
+      <button class="btn primary" id="cfgSave" type="button">Conectar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- Constantes ---------- */
+const LS_URL = 'fila_script_url';
+const LS_CACHE = 'fila_cache_v1';
+const COLECOES_BASE = ['Ideias de conteúdo', 'Design', 'Ler com calma', 'Sem coleção'];
+const FORMATOS = ['reel', 'carrossel', 'foto', 'post'];
+const CAMADAS = ['território profissional', 'tese', 'marca', 'respiro'];
+const POTENCIAIS = ['alto', 'médio', 'baixo'];
+const TIPOS = ['conteúdo', 'design', 'os dois'];
+const STATUS_LABELS = { pendente: 'Pendentes', lido: 'Lidos', arquivado: 'Arquivados', indisponivel: 'Indisponíveis' };
+const STATUS_UM = { pendente: 'Pendente', lido: 'Lido', arquivado: 'Arquivado', indisponivel: 'Indisponível' };
+const LIMITE_PENDENTES = 30;
+
+/* ---------- Utilidades ---------- */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+};
+
+let scriptUrl = store.get(LS_URL) || '';
+let items = [];
+let state = { tab: 'pendente', col: 'Todas', q: '' };
+let loadError = '';
+
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+/* ---------- Comunicação com o script ---------- */
+async function api(params) {
+  if (!scriptUrl) throw new Error('Sem conexão configurada.');
+  const u = new URL(scriptUrl);
+  Object.keys(params).forEach((k) => u.searchParams.set(k, params[k]));
+  const r = await fetch(u.toString());
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.erro || 'Erro desconhecido.');
+  return j;
+}
+
+async function load() {
+  const cache = store.get(LS_CACHE);
+  if (cache && !items.length) {
+    try { items = JSON.parse(cache); render(); } catch (e) {}
+  }
+  try {
+    const j = await api({ acao: 'listar' });
+    items = j.itens;
+    loadError = '';
+    store.set(LS_CACHE, JSON.stringify(items));
+  } catch (e) {
+    loadError = e.message;
+  }
+  render();
+}
+
+function persistCache() { store.set(LS_CACHE, JSON.stringify(items)); }
+
+/* ---------- Adicionar ---------- */
+async function addLink(link) {
+  link = (link || '').trim();
+  if (!/instagram\.com\//i.test(link)) { toast('Esse não parece um link do Instagram.'); return; }
+  const colecao = (state.col !== 'Todas') ? state.col : '';
+  try {
+    const params = { acao: 'adicionar', link: link };
+    if (colecao) params.colecao = colecao;
+    const j = await api(params);
+    if (j.duplicado) {
+      toast('Esse link já estava na fila.');
+    } else {
+      items.unshift(j.item);
+      persistCache();
+      state.tab = 'pendente';
+      toast('Salvo na fila.');
+    }
+    render();
+  } catch (e) {
+    toast('Não consegui salvar: ' + e.message);
+  }
+}
+
+/* ---------- Atualizar ---------- */
+async function save(id, field, value) {
+  const it = items.find((x) => x.id === id);
+  if (!it) return;
+  it[field] = value;
+  persistCache();
+  try {
+    const params = { acao: 'atualizar', id: id };
+    params[field] = value;
+    await api(params);
+    toast('Salvo.');
+  } catch (e) {
+    toast('Não consegui salvar: ' + e.message);
+  }
+}
+
+function setStatus(id, status) {
+  save(id, 'status', status);
+  render();
+}
+
+/* ---------- Datas ---------- */
+function salvoHa(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const dia = new Date(d); dia.setHours(0, 0, 0, 0);
+  const n = Math.round((hoje - dia) / 86400000);
+  if (n <= 0) return 'hoje';
+  if (n === 1) return 'ontem';
+  if (n < 30) return 'há ' + n + ' dias';
+  const m = Math.floor(n / 30);
+  return m === 1 ? 'há 1 mês' : 'há ' + m + ' meses';
+}
+
+/* ---------- Desenho da tela ---------- */
+function colecoes() {
+  const set = new Set(COLECOES_BASE);
+  items.forEach((p) => { if (p.colecao) set.add(p.colecao); });
+  return Array.from(set);
+}
+const countStatus = (s) => items.filter((p) => p.status === s).length;
+
+function renderNav() {
+  const tabs = Object.keys(STATUS_LABELS).filter((s) => s !== 'indisponivel' || countStatus(s) > 0);
+  $('tabs').innerHTML = tabs.map((s) =>
+    '<button class="pill ' + (state.tab === s ? 'on' : '') + '" data-tab="' + s + '">' + STATUS_LABELS[s] + '<span class="n">' + countStatus(s) + '</span></button>').join('');
+  const cols = ['Todas'].concat(colecoes());
+  $('chips').innerHTML = cols.map((c) =>
+    '<button class="chip ' + (state.col === c ? 'on' : '') + '" data-col="' + esc(c) + '">' + esc(c) + '</button>').join('');
+  $('title').textContent = STATUS_LABELS[state.tab];
+  const n = countStatus(state.tab);
+  $('sub').textContent = state.tab === 'pendente'
+    ? (n === 0 ? 'nada esperando por você' : n === 1 ? '1 post esperando por você' : n + ' posts esperando por você')
+    : (n === 1 ? '1 post' : n + ' posts');
+}
+
+function renderBanners() {
+  let h = '';
+  if (loadError) {
+    h += '<div class="banner err">Não consegui falar com a planilha (' + esc(loadError) + '). <button data-act-global="config">Conferir conexão</button> <button data-act-global="reload">Tentar de novo</button></div>';
+  }
+  if (countStatus('pendente') > LIMITE_PENDENTES) {
+    h += '<div class="banner warn">Você passou de ' + LIMITE_PENDENTES + ' pendentes. Combinado: parar de salvar até consumir uma parte da fila.</div>';
+  }
+  $('banners').innerHTML = h;
+}
+
+function opts(lista, atual, comVazio) {
+  let l = lista.slice();
+  if (atual && l.indexOf(atual) === -1) l.push(atual);
+  return (comVazio ? '<option value="">—</option>' : '') +
+    l.map((o) => '<option value="' + esc(o) + '"' + (o === atual ? ' selected' : '') + '>' + esc(o) + '</option>').join('');
+}
+
+function embedHtml(p) {
+  if (p.status === 'indisponivel') {
+    return '<div class="media"><div class="unavail"><div style="font-size:30px">⊘</div><div>Este post não está mais disponível.</div><a href="' + esc(p.link) + '" target="_blank" rel="noopener">abrir link original</a></div></div>';
+  }
+  const src = p.link.replace(/\/?$/, '/') + 'embed/captioned/';
+  return '<div class="media"><iframe src="' + esc(src) + '" loading="lazy" scrolling="no" allowfullscreen title="Post salvo do Instagram"></iframe></div>';
+}
+
+function cardHtml(p) {
+  const acoes = p.status === 'pendente'
+    ? '<button class="btn primary" data-act="lido">✓ Marcar como lido</button><button class="btn" data-act="arquivado">Arquivar</button>'
+    : '<button class="btn" data-act="pendente">↺ Voltar para pendentes</button>';
+  const naoCarregou = p.status !== 'indisponivel'
+    ? '<button class="btn link" data-act="indisponivel">não carregou?</button>' : '';
+  return '<article class="card" data-id="' + esc(p.id) + '">' + embedHtml(p) +
+    '<div class="notes">' +
+      '<div class="meta-top"><span class="badge b-' + p.status + '">' + esc(STATUS_UM[p.status] || p.status) + '</span>' +
+        '<span>salvo ' + esc(salvoHa(p.data_salvou)) + '</span>' +
+        (p.perfil ? '<span>· @' + esc(p.perfil) + '</span>' : '') + '</div>' +
+      '<input class="tema" data-f="tema" type="text" placeholder="Qual é a ideia deste post?" value="' + esc(p.tema) + '">' +
+      '<div class="field"><span class="lbl">O que aproveitar</span><textarea data-f="aproveitar" placeholder="Conteúdo, design, estrutura…">' + esc(p.aproveitar) + '</textarea></div>' +
+      '<div class="field"><span class="lbl">Minha nota</span><textarea data-f="nota" placeholder="Escrever uma nota…">' + esc(p.nota) + '</textarea></div>' +
+      '<details class="more"><summary>Classificar</summary><div class="more-body">' +
+        '<div class="grid2">' +
+          '<div class="field"><span class="lbl">Coleção</span><select data-f="colecao">' + opts(colecoes(), p.colecao, false) + '</select></div>' +
+          '<div class="field"><span class="lbl">Formato</span><select data-f="formato">' + opts(FORMATOS, p.formato, false) + '</select></div>' +
+          '<div class="field"><span class="lbl">Camada</span><select data-f="camada">' + opts(CAMADAS, p.camada, true) + '</select></div>' +
+          '<div class="field"><span class="lbl">Potencial</span><select data-f="potencial">' + opts(POTENCIAIS, p.potencial, true) + '</select></div>' +
+          '<div class="field"><span class="lbl">Tipo de inspiração</span><select data-f="tipo_inspiracao">' + opts(TIPOS, p.tipo_inspiracao, true) + '</select></div>' +
+          '<div class="field"><span class="lbl">Perfil de origem</span><input type="text" data-f="perfil" placeholder="sem @" value="' + esc(p.perfil) + '"></div>' +
+        '</div>' +
+        '<div class="field"><span class="lbl">Motivo do potencial</span><input type="text" data-f="motivo_potencial" value="' + esc(p.motivo_potencial) + '"></div>' +
+        '<div class="field"><span class="lbl">Tags (separe por vírgula)</span><input type="text" data-f="tags" value="' + esc(p.tags) + '"></div>' +
+        '<label class="check"><input type="checkbox" data-f="virou_pauta"' + (p.virou_pauta === 'sim' ? ' checked' : '') + '> Virou pauta</label>' +
+      '</div></details>' +
+      '<div class="actions">' + acoes +
+        '<a class="btn link" href="' + esc(p.link) + '" target="_blank" rel="noopener">abrir no Instagram</a>' + naoCarregou + '</div>' +
+    '</div></article>';
+}
+
+function renderFeed() {
+  const q = state.q.trim().toLowerCase();
+  const lista = items
+    .filter((p) => p.status === state.tab)
+    .filter((p) => state.col === 'Todas' || p.colecao === state.col)
+    .filter((p) => !q || [p.tema, p.nota, p.perfil, p.tags, p.aproveitar].join(' ').toLowerCase().indexOf(q) !== -1)
+    .sort((a, b) => String(b.data_salvou).localeCompare(String(a.data_salvou)));
+  if (lista.length) {
+    $('feed').innerHTML = lista.map(cardHtml).join('');
+  } else if (!items.length && !loadError) {
+    $('feed').innerHTML = '<div class="empty"><div class="big">Carregando…</div></div>';
+  } else {
+    $('feed').innerHTML = '<div class="empty"><div class="big">Fila em dia ✦</div><div class="small">Nada por aqui.</div></div>';
+  }
+}
+
+function render() {
+  // não redesenha os cartões enquanto a pessoa digita numa anotação
+  const ativo = document.activeElement;
+  if (ativo && ativo.closest && ativo.closest('#feed') && ativo.matches('input,textarea,select')) { renderNav(); renderBanners(); return; }
+  renderNav(); renderBanners(); renderFeed();
+}
+
+/* ---------- Eventos ---------- */
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-tab],[data-col],[data-act],[data-act-global]');
+  if (!t) return;
+  if (t.dataset.tab) { state.tab = t.dataset.tab; renderNav(); renderBanners(); renderFeed(); }
+  else if (t.dataset.col) { state.col = t.dataset.col; renderNav(); renderFeed(); }
+  else if (t.dataset.act) {
+    const card = t.closest('[data-id]');
+    if (card) setStatus(card.dataset.id, t.dataset.act);
+  } else if (t.dataset.actGlobal === 'config') openConfig();
+  else if (t.dataset.actGlobal === 'reload') load();
+});
+
+$('feed').addEventListener('change', (e) => {
+  const el = e.target.closest('[data-f]');
+  const card = e.target.closest('[data-id]');
+  if (!el || !card) return;
+  const campo = el.dataset.f;
+  let valor;
+  if (el.type === 'checkbox') valor = el.checked ? 'sim' : 'não';
+  else {
+    valor = el.value.trim();
+    if (campo === 'tags') valor = valor.split(',').map((s) => s.trim().replace(/^#/, '')).filter(Boolean).join(', ');
+    if (campo === 'perfil') valor = valor.replace(/^@/, '');
+    el.value = valor;
+  }
+  save(card.dataset.id, campo, valor);
+  if (campo === 'colecao') renderNav();
+});
+
+$('dock').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const inp = $('dock').querySelector('input');
+  const v = inp.value;
+  inp.value = '';
+  inp.blur();
+  addLink(v);
+});
+
+let buscaTimer;
+$('search').addEventListener('input', (e) => {
+  clearTimeout(buscaTimer);
+  buscaTimer = setTimeout(() => { state.q = e.target.value; renderFeed(); }, 250);
+});
+
+/* ---------- Configuração da conexão ---------- */
+function openConfig() {
+  $('cfgUrl').value = scriptUrl;
+  $('cfgMsg').textContent = '';
+  $('cfgCancel').style.display = scriptUrl ? '' : 'none';
+  $('config').classList.add('show');
+}
+function closeConfig() { $('config').classList.remove('show'); }
+
+$('openConfig').addEventListener('click', openConfig);
+$('cfgCancel').addEventListener('click', closeConfig);
+$('cfgSave').addEventListener('click', async () => {
+  const url = $('cfgUrl').value.trim();
+  const msg = $('cfgMsg');
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) {
+    msg.style.color = 'var(--err)';
+    msg.textContent = 'O endereço deve começar com https://script.google.com e terminar em /exec.';
+    return;
+  }
+  msg.style.color = 'var(--muted)';
+  msg.textContent = 'Testando…';
+  const anterior = scriptUrl;
+  scriptUrl = url;
+  try {
+    await api({ acao: 'ping' });
+    store.set(LS_URL, url);
+    closeConfig();
+    toast('Conectado.');
+    await load();
+    await tratarLinkDaURL();
+  } catch (e) {
+    scriptUrl = anterior;
+    msg.style.color = 'var(--err)';
+    msg.textContent = 'Não consegui conectar. Confira se copiou a URL completa e se o acesso está como "Qualquer pessoa".';
+  }
+});
+
+/* ---------- Link vindo do botão dos favoritos (computador) ---------- */
+async function tratarLinkDaURL() {
+  const p = new URLSearchParams(location.search);
+  const link = p.get('add');
+  if (!link || !scriptUrl) return;
+  history.replaceState(null, '', location.pathname);
+  await addLink(link);
+}
+
+/* ---------- Início ---------- */
+(async function iniciar() {
+  render();
+  if (!scriptUrl) { openConfig(); return; }
+  await load();
+  await tratarLinkDaURL();
+})();
+</script>
+</body>
+</html>
