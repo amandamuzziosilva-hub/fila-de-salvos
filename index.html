@@ -833,15 +833,14 @@ function grupoHtml(p, g) {
     '<div class="opts">' + ops + '</div></div>';
 }
 
-function cardHtml(p) {
+// Parte do cartão sem o post do Instagram (é o que muda quando você classifica ou anota)
+function notesHtml(p) {
   const acoes = p.status === 'pendente'
     ? '<button class="btn primary" data-act="lido">✓ Marcar como lido</button><button class="btn" data-act="arquivado">Arquivar</button>'
     : '<button class="btn" data-act="pendente">↺ Voltar para pendentes</button>';
   const naoCarregou = p.status !== 'indisponivel'
     ? '<button class="btn link" data-act="indisponivel">não carregou?</button>' : '';
-  return '<article class="card" data-id="' + esc(p.id) + '">' + embedHtml(p) +
-    '<div class="notes">' +
-      '<div class="meta-top"><span class="badge b-' + p.status + '">' + esc(STATUS_UM[p.status] || p.status) + '</span>' +
+  return '<div class="meta-top"><span class="badge b-' + p.status + '">' + esc(STATUS_UM[p.status] || p.status) + '</span>' +
         '<span>salvo ' + esc(salvoHa(p.data_salvou)) + '</span>' +
         (p.perfil ? '<span>· @' + esc(p.perfil) + '</span>' : '') + '</div>' +
       '<textarea class="tema" rows="1" data-f="tema" placeholder="Qual é a ideia deste post?">' + esc(p.tema) + '</textarea>' +
@@ -850,8 +849,19 @@ function cardHtml(p) {
       '<div class="field"><span class="lbl">Minha nota</span><textarea data-f="nota" placeholder="Escrever uma nota…">' + esc(p.nota) + '</textarea></div>' +
       '<div class="actions">' + acoes +
         '<a class="btn link" href="' + esc(p.link) + '" target="_blank" rel="noopener">abrir no Instagram</a>' + naoCarregou +
-        '<button class="btn link" data-act="excluir">excluir</button></div>' +
-    '</div></article>';
+        '<button class="btn link" data-act="excluir">excluir</button></div>';
+}
+// O post só muda se o link mudar ou se ele for marcado como indisponível
+const chaveMidia = (p) => p.status === 'indisponivel' ? 'x' : p.link;
+
+function novoCartao(p) {
+  const el = document.createElement('article');
+  el.className = 'card';
+  el.dataset.id = p.id;
+  el.innerHTML = embedHtml(p) + '<div class="notes"></div>';
+  el._midia = chaveMidia(p);
+  el._notas = null;
+  return el;
 }
 
 function autosize(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
@@ -863,13 +873,35 @@ function renderFeed() {
     .filter((p) => state.col === 'Todas' || p.colecao === state.col)
     .filter((p) => !q || [p.tema, p.nota, p.perfil, p.tags, p.aproveitar].join(' ').toLowerCase().indexOf(q) !== -1)
     .sort((a, b) => String(b.data_salvou).localeCompare(String(a.data_salvou)));
+  const feed = $('feed');
   if (lista.length) {
-    $('feed').innerHTML = lista.map(cardHtml).join('');
-    $('feed').querySelectorAll('.tema').forEach(autosize);
+    // Mantém os cartões que já estão na tela, para os posts do Instagram não serem baixados de novo.
+    // Só entram cartões novos, saem os que não pertencem mais à lista e muda o texto do que foi alterado.
+    const ids = new Set(lista.map((p) => p.id));
+    const atuais = {};
+    Array.from(feed.children).forEach((el) => {
+      if (el.classList.contains('card') && ids.has(el.dataset.id) && !atuais[el.dataset.id]) atuais[el.dataset.id] = el;
+      else el.remove();
+    });
+    lista.forEach((p, i) => {
+      let el = atuais[p.id];
+      if (el && el._midia !== chaveMidia(p)) {
+        el.querySelector('.media').outerHTML = embedHtml(p);
+        el._midia = chaveMidia(p);
+      }
+      if (!el) el = novoCartao(p);
+      if (feed.children[i] !== el) feed.insertBefore(el, feed.children[i] || null);
+      const notas = notesHtml(p);
+      if (el._notas !== notas) {
+        el.querySelector('.notes').innerHTML = notas;
+        el._notas = notas;
+        el.querySelectorAll('.tema').forEach(autosize);
+      }
+    });
   } else if (!items.length && !loadError) {
-    $('feed').innerHTML = '<div class="empty"><div class="big">Carregando…</div></div>';
+    feed.innerHTML = '<div class="empty"><div class="big">Carregando…</div></div>';
   } else {
-    $('feed').innerHTML = '<div class="empty"><div class="big">Fila em dia ✦</div><div class="small">Nada por aqui.</div></div>';
+    feed.innerHTML = '<div class="empty"><div class="big">Fila em dia ✦</div><div class="small">Nada por aqui.</div></div>';
   }
 }
 
