@@ -469,6 +469,13 @@
   .modal p{color:var(--soft)}
   .modal input{background:linear-gradient(180deg,rgba(255,255,255,.62),rgba(255,255,255,.30));border:1px solid rgba(255,255,255,.9)}
   .lst-row{border-bottom-color:rgba(255,255,255,.7)}
+
+  /* bolinha da conexão: cinza verificando, verde conectado, laranja sem resposta */
+  .conn{display:inline-flex;align-items:center;gap:7px}
+  .conn .dot{width:8px;height:8px;border-radius:50%;flex:none;background:#c9bfc5;transition:background .3s,box-shadow .3s}
+  .conn .dot.ok{background:radial-gradient(circle at 35% 30%,#e9f8e7 0,#5fae64 60%);box-shadow:0 0 0 3px rgba(95,174,100,.16),0 0 8px rgba(95,174,100,.55)}
+  .conn .dot.falha{background:radial-gradient(circle at 35% 30%,#fff1e2 0,#e8862e 60%);box-shadow:0 0 0 3px rgba(232,134,46,.18),0 0 8px rgba(232,134,46,.6)}
+  .banner.err{background:rgba(253,232,212,.92);color:#a5561a;border-color:rgba(232,134,46,.35)}
 </style>
 </head>
 <body>
@@ -480,7 +487,7 @@
       <h1 class="title" id="title">Pendentes</h1>
       <p class="sub" id="sub">o que você guardou, sem o feed</p>
     </div>
-    <button class="conn" id="openConfig" type="button">conexão</button>
+    <button class="conn" id="openConfig" type="button" title="Verificando a conexão…"><i class="dot" id="connDot"></i>conexão</button>
   </header>
 
   <div class="tools">
@@ -629,12 +636,29 @@ function toast(msg) {
 }
 
 /* ---------- Comunicação com o script ---------- */
-async function api(params) {
+let conexao = 'verificando';   // 'verificando', 'ok' ou 'falha'
+function setConexao(estado) {
+  if (conexao === estado) return;
+  conexao = estado;
+  $('connDot').className = 'dot ' + estado;
+  $('openConfig').title = estado === 'ok' ? 'Conectado à planilha' : estado === 'falha' ? 'Sem resposta da planilha' : 'Verificando a conexão…';
+  renderBanners();
+}
+
+// teste: true no teste de um endereço novo, que não deve mudar a bolinha do endereço atual
+async function api(params, teste) {
   if (!scriptUrl) throw new Error('Sem conexão configurada.');
   const u = new URL(scriptUrl);
   Object.keys(params).forEach((k) => u.searchParams.set(k, params[k]));
-  const r = await fetch(u.toString());
-  const j = await r.json();
+  let j;
+  try {
+    const r = await fetch(u.toString());
+    j = await r.json();
+  } catch (e) {
+    if (!teste) setConexao('falha');
+    throw new Error('a planilha não respondeu');
+  }
+  if (!teste) setConexao('ok');   // o script respondeu, mesmo que seja com um aviso
   if (!j.ok) throw new Error(j.erro || 'Erro desconhecido.');
   return j;
 }
@@ -795,8 +819,11 @@ function renderNav() {
 
 function renderBanners() {
   let h = '';
-  if (loadError) {
-    h += '<div class="banner err">Não consegui falar com a planilha (' + esc(loadError) + '). <button data-act-global="config">Conferir conexão</button> <button data-act-global="reload">Tentar de novo</button></div>';
+  if (loadError || conexao === 'falha') {
+    const aviso = conexao === 'falha'
+      ? 'Sem conexão com a planilha. O que você alterar agora pode não ser salvo.'
+      : 'A planilha respondeu com um erro (' + esc(loadError) + ').';
+    h += '<div class="banner err">' + aviso + ' <button data-act-global="config">Conferir conexão</button> <button data-act-global="reload">Tentar de novo</button></div>';
   }
   if (countStatus('pendente') > LIMITE_PENDENTES) {
     h += '<div class="banner warn">Você passou de ' + LIMITE_PENDENTES + ' pendentes. Combinado: parar de salvar até consumir uma parte da fila.</div>';
@@ -1021,8 +1048,9 @@ $('cfgSave').addEventListener('click', async () => {
   const anterior = scriptUrl;
   scriptUrl = url;
   try {
-    await api({ acao: 'ping' });
+    await api({ acao: 'ping' }, true);
     store.set(LS_URL, url);
+    setConexao('ok');
     closeConfig();
     toast('Conectado.');
     await load();
