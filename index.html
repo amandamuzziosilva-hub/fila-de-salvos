@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#f6e4e2">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-180.png">
 <title>Fila de salvos</title>
 <style>
   :root{
@@ -486,6 +487,7 @@
     <button class="tool" type="button" data-act-global="refresh">↻ Atualizar</button>
     <button class="tool" type="button" data-act-global="listas">Gerenciar listas</button>
     <button class="tool" type="button" data-act-global="backup">Baixar backup</button>
+    <button class="tool" type="button" data-act-global="criacao" id="toolCriacao" hidden>⤓ Lista de criação</button>
   </div>
 
   <nav class="tabs" id="tabs"></nav>
@@ -545,6 +547,19 @@
   </div>
 </div>
 
+<div class="overlay" id="criacao">
+  <div class="modal">
+    <h2>Lista de criação</h2>
+    <p id="crInfo"></p>
+    <p>Cada post vem numa linha, nesta ordem: <b>minha nota</b>, ideia do post, coleção, formato e link. A coluna “Capa” vem vazia, para você colar o print depois. O que não foi catalogado fica em branco.</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn primary" id="crCsv" type="button">Baixar lista (planilha)</button>
+    </div>
+    <p style="margin-top:14px">No iPhone abre a janela de compartilhar: escolha “Salvar em Arquivos”.</p>
+    <div class="row"><button class="btn" id="crClose" type="button">Fechar</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="confirm">
   <div class="modal">
     <h2 id="cfTitle"></h2>
@@ -570,7 +585,8 @@ const LISTAS_PADRAO = {
   camada: ['território profissional', 'tese', 'marca', 'respiro'],
   tipo_inspiracao: ['conteúdo', 'design', 'os dois']
 };
-const LISTA_ROTULOS = { colecao: 'Coleções', formato: 'Formato', camada: 'Camada', tipo_inspiracao: 'Tipo de inspiração' };
+// Só coleção e formato aparecem na tela. Camada e tipo de inspiração continuam na planilha e no backup.
+const LISTA_ROTULOS = { colecao: 'Coleções', formato: 'Formato' };
 const LISTA_SEM = { colecao: 'em “Sem coleção”', formato: 'sem formato definido', camada: 'sem camada', tipo_inspiracao: 'sem tipo de inspiração' };
 const CAMPOS_CSV = ['id', 'link', 'data_salvou', 'data_post', 'perfil', 'formato', 'status', 'colecao', 'tags', 'tema', 'aproveitar', 'tipo_inspiracao', 'camada', 'potencial', 'motivo_potencial', 'nota', 'virou_pauta'];
 const STATUS_LABELS = { pendente: 'Pendentes', lido: 'Lidos', arquivado: 'Arquivados', indisponivel: 'Indisponíveis' };
@@ -770,6 +786,7 @@ function renderNav() {
   $('chips').innerHTML = cols.map((c) =>
     '<button class="chip ' + (state.col === c ? 'on' : '') + '" data-col="' + esc(c) + '">' + esc(c) + '</button>').join('');
   $('title').textContent = STATUS_LABELS[state.tab];
+  $('toolCriacao').hidden = state.tab !== 'lido';
   const n = countStatus(state.tab);
   $('sub').innerHTML = state.tab === 'pendente'
     ? (n === 0 ? 'nada esperando por você' : '<b>' + n + '</b>' + (n === 1 ? ' post esperando por você' : ' posts esperando por você'))
@@ -797,9 +814,7 @@ function embedHtml(p) {
 
 const GRUPOS = [
   { k: 'colecao', rot: 'Coleção', cls: 'g-rose' },
-  { k: 'formato', rot: 'Formato', cls: 'g-lav' },
-  { k: 'camada', rot: 'Camada', cls: 'g-sage' },
-  { k: 'tipo_inspiracao', rot: 'Tipo de inspiração', cls: 'g-sand' }
+  { k: 'formato', rot: 'Formato', cls: 'g-lav' }
 ];
 const aberto = {};   // 'id:campo' -> categoria aberta
 
@@ -910,6 +925,7 @@ document.addEventListener('click', (e) => {
   else if (t.dataset.actGlobal === 'refresh') atualizar(true);
   else if (t.dataset.actGlobal === 'listas') openListas();
   else if (t.dataset.actGlobal === 'backup') openBackup();
+  else if (t.dataset.actGlobal === 'criacao') openCriacao();
 });
 
 $('feed').addEventListener('change', (e) => {
@@ -1134,6 +1150,33 @@ function openBackup() {
 $('bkCsv').addEventListener('click', () => entregarArquivo('fila-de-salvos-' + dataDeHoje() + '.csv', 'text/csv', montarCsv()));
 $('bkJson').addEventListener('click', () => entregarArquivo('fila-de-salvos-' + dataDeHoje() + '.json', 'application/json', montarJson()));
 $('bkClose').addEventListener('click', () => { $('backup').classList.remove('show'); });
+
+/* ---------- Lista de criação (posts lidos) ---------- */
+// Todos os lidos, de todas as coleções
+function lidosDaLista() {
+  return items
+    .filter((p) => p.status === 'lido')
+    .sort((a, b) => String(b.data_salvou).localeCompare(String(a.data_salvou)));
+}
+function montarCsvCriacao() {
+  const cab = ['Minha nota', 'Ideia do post', 'Coleção', 'Formato', 'Link', 'Capa'];
+  const linhas = lidosDaLista().map((p) => [p.nota, p.tema, p.colecao, p.formato, p.link, ''].map(csvCelula).join(','));
+  return '\ufeff' + [cab.join(',')].concat(linhas).join('\r\n');
+}
+function infoCriacao() {
+  const n = lidosDaLista().length;
+  $('crInfo').textContent = n + (n === 1 ? ' post lido, de todas as coleções.' : ' posts lidos, de todas as coleções.');
+}
+function openCriacao() {
+  $('criacao').classList.add('show');
+  $('crInfo').textContent = 'Atualizando os dados…';
+  atualizar(false).then(infoCriacao);
+}
+$('crCsv').addEventListener('click', () => {
+  if (!lidosDaLista().length) { toast('Nenhum post lido para baixar.'); return; }
+  entregarArquivo('lista-de-criacao-' + dataDeHoje() + '.csv', 'text/csv', montarCsvCriacao());
+});
+$('crClose').addEventListener('click', () => { $('criacao').classList.remove('show'); });
 
 /* ---------- Puxar a tela para atualizar ---------- */
 const ptr = { y0: null, dy: 0 };
